@@ -27,9 +27,9 @@ The following needs to be installed first:
 
 
 ## Design Choices - Session and Speaker Implementation
-Session functionality is organized by the following classes:
+**Session** functionality is organized by the following classes:
 
-* Session(ndb.Model): NDB kind that would be saved in Google Datastore
+* Session(ndb.Model): NDB kind that will be saved in Google Datastore
     * name = ndb.StringProperty(required=True)
     * highlights = ndb.StringProperty()
     * speaker = ndb.StringProperty()        **speaker is simply implemented as String property.**
@@ -43,10 +43,10 @@ Session functionality is organized by the following classes:
     * name = messages.StringField(1)
     * highlights = messages.StringField(2)
     * speaker = messages.StringField(3)
-    * duration = messages.IntegerProperty(4, variant=messages.Variant.INT32)
+    * duration = messages.IntegerField(4, variant=messages.Variant.INT32)
     * typeOfSession = messages.StringField(5, repeated=True)
-    * date = messages.StringField(6)  **would saved as DateProperty on Datastore**
-    * startTime = messages.StringField(7)   **would saved as TimeProperty on Datastore**
+    * date = messages.StringField(6)  **will be saved as DateProperty on Datastore**
+    * startTime = messages.StringField(7)   **will be saved as TimeProperty on Datastore**
     * conferenceId = messages.StringField(8)    **parent conference ID**
     * websafeKey = messages.StringField(9)  **websafeKey for URL presentation**
     * conferenceDisplayName = messages.StringField(10)
@@ -54,4 +54,18 @@ Session functionality is organized by the following classes:
 * SessionForms(messages.Message): Set of session messages for view
     * items = messages.MessageField(SessionForm, 1, repeated=True)
 
-Speaker is simply implemented as String property of Session kind.
+**Speaker** is simply implemented as String property of Session kind.
+
+
+## Additional Queries
+* getSessionsByKey
+    * get a session info by websafe session key
+    * http_method='GET'
+    * path='session/{SessionKey}'
+    * {SessionKey} - websafe session key
+    
+* getSessionsByDuration
+    * get sessions by duration range
+    * http_method='GET'
+    * path='sessionsByDuration/{duration}'
+    * {duration} - range of duration; format "{minimum minutes}_{maximum minutes}"

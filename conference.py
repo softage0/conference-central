@@ -74,7 +74,8 @@ FIELDS = {
 }
 
 SESSION_DEFAULTS = {
-    "typeOfSession": ["Default"],
+    "duration": 0,
+    "typeOfSession": ["Default"]
 }
 
 CONF_GET_REQUEST = endpoints.ResourceContainer(
@@ -87,7 +88,7 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
-WISHLIST_REQUEST = endpoints.ResourceContainer(
+SESSION_KEY_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     SessionKey=messages.StringField(1)
 )
@@ -541,12 +542,12 @@ class ConferenceApi(remote.Service):
     # - - - Session - - - - - - - - - - - - - - - - - - - -
 
     def _copySessionToForm(self, session, conference_name):
-        """Copy relevant fields from Conference to ConferenceForm."""
+        """Copy relevant fields from Session to SessionForm."""
         sf = SessionForm()
         for field in sf.all_fields():
             if hasattr(session, field.name):
                 # convert Date to date string; just copy others
-                if field.name == "duration" or field.name == "date" or field.name == "startTime":
+                if field.name == "date" or field.name == "startTime":
                     setattr(sf, field.name, str(getattr(session, field.name)))
                 else:
                     setattr(sf, field.name, getattr(session, field.name))
@@ -558,10 +559,10 @@ class ConferenceApi(remote.Service):
         return sf
 
     @endpoints.method(CONF_GET_REQUEST, SessionForms,
-                      path='sessions/{websafeConferenceKey}',
+                      path='conference/{websafeConferenceKey}/session',
                       http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
-        """Return requested conference (by websafeConferenceKey)."""
+        """Return requested sessions by websafeConferenceKey."""
         # get Conference object from request; bail if not found
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         conference = c_key.get()
@@ -581,10 +582,10 @@ class ConferenceApi(remote.Service):
     )
 
     @endpoints.method(SESSION_BY_TYPE_REQUEST, SessionForms,
-                      path='sessions/{websafeConferenceKey}/{typeOfSession}',
+                      path='conference/{websafeConferenceKey}/sessionsByType/{typeOfSession}',
                       http_method='GET', name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
-        """Return requested conference by Type"""
+        """Return requested sessions by Type"""
 
         # get Conference object from request; bail if not found
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
@@ -607,7 +608,7 @@ class ConferenceApi(remote.Service):
                       path='sessionsBySpeaker/{speaker}',
                       http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
-        """Return requested conference by Speaker"""
+        """Return requested session by Speaker"""
         # get Conference object from request; bail if not found
         sessions = Session.query().filter(Session.speaker == request.speaker)
         # return set of ConferenceForm objects per Conference
@@ -660,11 +661,48 @@ class ConferenceApi(remote.Service):
         websafeConferenceKey=messages.StringField(1)
     )
 
-    @endpoints.method(SESSION_CREATE_REQUEST, SessionForm, path='session/{websafeConferenceKey}',
+    @endpoints.method(SESSION_CREATE_REQUEST, SessionForm, path='conference/{websafeConferenceKey}/session',
                       http_method='POST', name='createSession')
     def createSession(self, request):
         """Create new session."""
         return self._createSessionObject(request)
+
+    @endpoints.method(SESSION_KEY_REQUEST, SessionForm,
+                      path='session/{SessionKey}',
+                      http_method='GET', name='getSessionsByKey')
+    def getSessionsByKey(self, request):
+        """Return requested conference by websafeSessionKey"""
+        session = ndb.Key(urlsafe=request.SessionKey).get()
+        if not session:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % request.SessionKey)
+        return self._copySessionToForm(session, getattr(session.key.parent().get(), 'name'))
+
+    SESSION_BY_DURATION_REQUEST = endpoints.ResourceContainer(
+        message_types.VoidMessage,
+        duration=messages.StringField(1)
+    )
+
+    @endpoints.method(SESSION_BY_DURATION_REQUEST, SessionForms,
+                      path='sessionsByDuration/{duration}',
+                      http_method='GET', name='getSessionsByDuration')
+    def getSessionsByDuration(self, request):
+        """
+        Return requested session by duration range
+        :param request:
+                    duration: range of duration; format "{minimum minutes}_{maximum minutes}"
+        :return: all session between duration range
+        """
+        minimum, maximum = map(int, request.duration.split('_'))
+        if minimum > maximum:
+            raise endpoints.BadRequestException("Invalid duration range")
+
+        sessions = Session.query().filter(Session.duration >= minimum).filter(Session.duration <= maximum)
+
+        return SessionForms(
+            items=[self._copySessionToForm(session, getattr(session.key.parent().get(), 'name'))
+                   for session in sessions]
+        )
 
     # - - - Wishlist - - - - - - - - - - - - - - - - - - - -
 
@@ -707,14 +745,14 @@ class ConferenceApi(remote.Service):
         profile.put()
         return BooleanMessage(data=ret)
 
-    @endpoints.method(WISHLIST_REQUEST, BooleanMessage,
+    @endpoints.method(SESSION_KEY_REQUEST, BooleanMessage,
                       path='wishlist/{SessionKey}',
                       http_method='POST', name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
         """Add session to wish list."""
         return self._sessionRegistrationToWishlist(request)
 
-    @endpoints.method(WISHLIST_REQUEST, BooleanMessage,
+    @endpoints.method(SESSION_KEY_REQUEST, BooleanMessage,
                       path='wishlist/{SessionKey}',
                       http_method='DELETE', name='deleteSessionInWishlist')
     def deleteSessionInWishlist(self, request):
