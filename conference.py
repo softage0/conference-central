@@ -46,6 +46,7 @@ from utils import getUserId
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
+MEMCACHE_FEATURED_SPEAKER_KEY = "FEATURED_SPEAKER"
 ANNOUNCEMENT_TPL = ('Last chance to attend! The following conferences '
                     'are nearly sold out: %s')
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -651,10 +652,45 @@ class ConferenceApi(remote.Service):
         s_key = ndb.Key(Session, s_id, parent=c_key)
         data['key'] = s_key
 
-        # create Conference, send email to organizer confirming
-        # creation of Conference & return (modified) ConferenceForm
+        # create Session, check featured speaker
+        # creation of Session & return (modified) SessionForm
         Session(**data).put()
+        taskqueue.add(params={'speaker': data['speaker'],
+                              'websafeConferenceKey': request.websafeConferenceKey},
+                      url='/tasks/set_featured_speaker'
+                      )
+
         return self._copySessionToForm(s_key.get(), getattr(conference, 'name'))
+
+    @staticmethod
+    def _setFeaturedSpeaker(request):
+        """
+        Check the speaker. And if there is more than one session by this speaker at this conference,
+        also add a new Memcache entry that features the speaker and session names.
+        """
+        speaker = request.get('speaker')
+        print (request.get('websafeConferenceKey'))
+        c_key = ndb.Key(urlsafe=request.get('websafeConferenceKey'))
+        conference = c_key.get()
+        if not conference:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % c_key)
+
+        sessions = Session.query(ancestor=c_key).filter(Session.speaker == speaker)
+        if sessions:
+            featured_speaker = dict(
+                speaker=speaker,
+                sessions=list()
+            )
+            featured_speaker["sessions"] = [session.name for session in sessions]
+            memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, repr(featured_speaker))
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+                      path='session/featuredSpeaker/get',
+                      http_method='GET', name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return FeaturedSpeaker from memcache."""
+        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY) or "")
 
     SESSION_CREATE_REQUEST = endpoints.ResourceContainer(
         SessionForm,
