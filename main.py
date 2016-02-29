@@ -3,12 +3,6 @@
 """
 main.py -- Udacity conference server-side Python App Engine
     HTTP controller handlers for memcache & task queue access
-
-$Id$
-
-created by wesc on 2014 may 24
-modified by Wonju Jeon
-
 """
 
 import webapp2

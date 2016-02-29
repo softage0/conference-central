@@ -79,5 +79,5 @@ To get the result sessions, It needs two inequality filter for `typeOfSession`(!
 **Solution**
 
 1. Get the query result1 for `typeOfSession` != 'workshop'
-1. Get the query result2 for `startTime`-`duration`< 17:00
+1. Get the query result2 for `startTime`-`duration` < 17:00
 1. Compare `websafeKey` of each session in both results, and get the sessions that the same `websafeKey`s are existed in both results.

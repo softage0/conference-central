@@ -3,10 +3,6 @@
 """
 conference.py -- Udacity conference server-side Python App Engine API;
     uses Google Cloud Endpoints
-
-created by wesc on 2014 apr 21
-modified by Wonju Jeon
-
 """
 
 from datetime import datetime
@@ -43,13 +39,14 @@ from settings import ANDROID_AUDIENCE
 
 from utils import getUserId
 
+
+# Constants declaration
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
 MEMCACHE_FEATURED_SPEAKER_KEY = "FEATURED_SPEAKER"
 ANNOUNCEMENT_TPL = ('Last chance to attend! The following conferences '
                     'are nearly sold out: %s')
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 CONFERENCE_DEFAULTS = {
     "city": "Default City",
@@ -93,9 +90,6 @@ SESSION_KEY_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     SessionKey=messages.StringField(1)
 )
-
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 @endpoints.api(name='conference', version='v1', audiences=[ANDROID_AUDIENCE],
@@ -176,6 +170,7 @@ class ConferenceApi(remote.Service):
 
     @ndb.transactional()
     def _updateConferenceObject(self, request):
+        """update conference object"""
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
@@ -333,7 +328,6 @@ class ConferenceApi(remote.Service):
 
     def _copyProfileToForm(self, prof):
         """Copy relevant fields from Profile to ProfileForm."""
-        # copy relevant fields from Profile to ProfileForm
         pf = ProfileForm()
         for field in pf.all_fields():
             if hasattr(prof, field.name):
@@ -571,7 +565,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=c_key)
-        # return set of ConferenceForm objects per Conference
+        # return set of SessionForm objects per Session
         return SessionForms(
             items=[self._copySessionToForm(session, getattr(conference, 'name')) for session in sessions]
         )
@@ -586,8 +580,7 @@ class ConferenceApi(remote.Service):
                       path='conference/{websafeConferenceKey}/sessionsByType/{typeOfSession}',
                       http_method='GET', name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
-        """Return requested sessions by Type"""
-
+        """Return requested sessions by Type on the certain conference"""
         # get Conference object from request; bail if not found
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         conference = c_key.get()
@@ -595,7 +588,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=c_key).filter(Session.typeOfSession == request.typeOfSession)
-        # return set of ConferenceForm objects per Conference
+        # return set of SessionForm objects per Session
         return SessionForms(
             items=[self._copySessionToForm(session, getattr(conference, 'name')) for session in sessions]
         )
@@ -610,16 +603,14 @@ class ConferenceApi(remote.Service):
                       http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return requested session by Speaker"""
-        # get Conference object from request; bail if not found
         sessions = Session.query().filter(Session.speaker == request.speaker)
-        # return set of ConferenceForm objects per Conference
         return SessionForms(
             items=[self._copySessionToForm(session, getattr(session.key.parent().get(), 'name'))
                    for session in sessions]
         )
 
     def _createSessionObject(self, request):
-        """Create or update Session object, returning SessionForm/request."""
+        """Create or update Session object."""
         # preload necessary data items
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         conference = c_key.get()
@@ -661,36 +652,6 @@ class ConferenceApi(remote.Service):
                       )
 
         return self._copySessionToForm(s_key.get(), getattr(conference, 'name'))
-
-    @staticmethod
-    def _setFeaturedSpeaker(request):
-        """
-        Check the speaker. And if there is more than one session by this speaker at this conference,
-        also add a new Memcache entry that features the speaker and session names.
-        """
-        speaker = request.get('speaker')
-        print (request.get('websafeConferenceKey'))
-        c_key = ndb.Key(urlsafe=request.get('websafeConferenceKey'))
-        conference = c_key.get()
-        if not conference:
-            raise endpoints.NotFoundException(
-                'No conference found with key: %s' % c_key)
-
-        sessions = Session.query(ancestor=c_key).filter(Session.speaker == speaker)
-        if sessions:
-            featured_speaker = dict(
-                speaker=speaker,
-                sessions=list()
-            )
-            featured_speaker["sessions"] = [session.name for session in sessions]
-            memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, repr(featured_speaker))
-
-    @endpoints.method(message_types.VoidMessage, StringMessage,
-                      path='session/featuredSpeaker/get',
-                      http_method='GET', name='getFeaturedSpeaker')
-    def getFeaturedSpeaker(self, request):
-        """Return FeaturedSpeaker from memcache."""
-        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY) or "")
 
     SESSION_CREATE_REQUEST = endpoints.ResourceContainer(
         SessionForm,
@@ -740,6 +701,36 @@ class ConferenceApi(remote.Service):
                    for session in sessions]
         )
 
+    @staticmethod
+    def _setFeaturedSpeaker(request):
+        """
+        Check the speaker. And if there is more than one session by this speaker at this conference,
+        also add a new Memcache entry that features the speaker and session names.
+        """
+        speaker = request.get('speaker')
+        print (request.get('websafeConferenceKey'))
+        c_key = ndb.Key(urlsafe=request.get('websafeConferenceKey'))
+        conference = c_key.get()
+        if not conference:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % c_key)
+
+        sessions = Session.query(ancestor=c_key).filter(Session.speaker == speaker)
+        if sessions:
+            featured_speaker = dict(
+                speaker=speaker,
+                sessions=list()
+            )
+            featured_speaker["sessions"] = [session.name for session in sessions]
+            memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, repr(featured_speaker))
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+                      path='session/featuredSpeaker/get',
+                      http_method='GET', name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return FeaturedSpeaker from memcache."""
+        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY) or "")
+
     # - - - Wishlist - - - - - - - - - - - - - - - - - - - -
 
     @ndb.transactional(xg=False)
@@ -749,7 +740,7 @@ class ConferenceApi(remote.Service):
         profile = self._getProfileFromUser()  # get user Profile
 
         # check if conf exists given websafeSessionKey
-        # get conference; check that it exists
+        # get session; check that it exists
         s_key = request.SessionKey
         session = ndb.Key(urlsafe=s_key).get()
         if not session:
@@ -804,7 +795,7 @@ class ConferenceApi(remote.Service):
         session_keys = [ndb.Key(urlsafe=sessionKey) for sessionKey in profile.sessionKeysAdded]
         sessions = ndb.get_multi(session_keys)
 
-        # return set of ConferenceForm objects per Conference
+        # return set of SessionForm objects per Session
         return SessionForms(
             items=[self._copySessionToForm(session, getattr(session.key.parent().get(), 'name'))
                    for session in sessions]

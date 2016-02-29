@@ -3,10 +3,6 @@
 """
 models.py
 -- Udacity conference server-side Python App Engine data & ProtoRPC models
-
-created/forked from conferences.py by wesc on 2014 may 24
-modified by Wonju Jeon
-
 """
 
 import httplib
@@ -146,5 +142,5 @@ class SessionForm(messages.Message):
 
 
 class SessionForms(messages.Message):
-    """ConferenceForms -- multiple Session outbound form message"""
+    """SessionForms -- multiple Session outbound form message"""
     items = messages.MessageField(SessionForm, 1, repeated=True)
