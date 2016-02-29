@@ -87,6 +87,11 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
+WISHLIST_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    SessionKey=messages.StringField(1)
+)
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -534,6 +539,7 @@ class ConferenceApi(remote.Service):
         )
 
     # - - - Session - - - - - - - - - - - - - - - - - - - -
+
     def _copySessionToForm(self, session, conference_name):
         """Copy relevant fields from Conference to ConferenceForm."""
         sf = SessionForm()
@@ -662,6 +668,76 @@ class ConferenceApi(remote.Service):
     def createSession(self, request):
         """Create new session."""
         return self._createSessionObject(request)
+
+    # - - - Wishlist - - - - - - - - - - - - - - - - - - - -
+
+    @ndb.transactional(xg=False)
+    def _sessionRegistrationToWishlist(self, request, reg=True):
+        """add or delete sessions in wish list."""
+        ret = None
+        profile = self._getProfileFromUser()  # get user Profile
+
+        # check if conf exists given websafeSessionKey
+        # get conference; check that it exists
+        s_key = request.SessionKey
+        session = ndb.Key(urlsafe=s_key).get()
+        if not session:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % s_key)
+
+        # add
+        if reg:
+            # check if user already added otherwise add
+            if s_key in profile.sessionKeysAdded:
+                raise ConflictException(
+                    "You have already added this session")
+
+            # add user
+            profile.sessionKeysAdded.append(s_key)
+            ret = True
+
+        # delete
+        else:
+            # check if user already added
+            if s_key in profile.sessionKeysAdded:
+                # delete user
+                profile.sessionKeysAdded.remove(s_key)
+                ret = True
+            else:
+                ret = False
+
+        # write things back to the datastore & return
+        profile.put()
+        return BooleanMessage(data=ret)
+
+    @endpoints.method(WISHLIST_REQUEST, BooleanMessage,
+                      path='wishlist/{SessionKey}',
+                      http_method='POST', name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """Add session to wish list."""
+        return self._sessionRegistrationToWishlist(request)
+
+    @endpoints.method(WISHLIST_REQUEST, BooleanMessage,
+                      path='wishlist/{SessionKey}',
+                      http_method='DELETE', name='deleteSessionInWishlist')
+    def deleteSessionInWishlist(self, request):
+        """Delete session in wish list."""
+        return self._sessionRegistrationToWishlist(request, reg=False)
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+                      path='wishlist',
+                      http_method='GET', name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """Get list of sessions that user has added to wish list."""
+        profile = self._getProfileFromUser()  # get user Profile
+        session_keys = [ndb.Key(urlsafe=sessionKey) for sessionKey in profile.sessionKeysAdded]
+        sessions = ndb.get_multi(session_keys)
+
+        # return set of ConferenceForm objects per Conference
+        return SessionForms(
+            items=[self._copySessionToForm(session, getattr(session.key.parent().get(), 'name'))
+                   for session in sessions]
+        )
 
 
 api = endpoints.api_server([ConferenceApi])  # register API
