@@ -640,13 +640,10 @@ class ConferenceApi(remote.Service):
                 data[df] = SESSION_DEFAULTS[df]
                 setattr(request, df, SESSION_DEFAULTS[df])
 
-        # Todo: convert dates from strings to Date objects; set month based on start_date
-        if data['duration']:
-            data['duration'] = datetime.strptime(data['duration'][:10], "%Y-%m-%d").date()
         if data['date']:
             data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
         if data['startTime']:
-            data['startTime'] = datetime.strptime(data['startTime'][:10], "%Y-%m-%d").date()
+            data['startTime'] = datetime.strptime(data['startTime'], "%H:%M:%S").time()
 
         # generate Session Key based on Conference Key
         s_id = Session.allocate_ids(size=1, parent=c_key)[0]
