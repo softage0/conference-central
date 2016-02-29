@@ -69,3 +69,15 @@ The following needs to be installed first:
     * http_method='GET'
     * path='sessionsByDuration/{duration}'
     * {duration} - range of duration; format "{minimum minutes}_{maximum minutes}"
+
+
+## Query Problem
+> Let’s say that you don't like workshops and you don't like sessions after 7 pm. How would you handle a query for all non-workshop sessions before 7 pm? What is the problem for implementing this query? What ways to solve it did you think of?
+
+To get the result sessions, It needs two inequality filter for `typeOfSession`(!=) and `startTime`-`duration`(<). Inequality filters for *only one property* per query is supported, so this query is unable to be implemented.
+
+**Solution**
+
+1. Get the query result1 for `typeOfSession` != 'workshop'
+1. Get the query result2 for `startTime`-`duration`< 17:00
+1. Compare `websafeKey` of each session in both results, and get the sessions that the same `websafeKey`s are existed in both results.
